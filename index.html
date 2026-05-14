@@ -491,6 +491,7 @@
   <div class="logo">📚 課題ダッシュボード</div>
   <div class="header-right">
     <div class="date-badge" id="headerDate"></div>
+    <button class="btn btn-outline" onclick="openRecurringList()" style="margin-right:4px;">🔁 定期課題</button>
     <button class="btn" onclick="openModal()">＋ 課題を追加</button>
   </div>
 </header>
@@ -658,6 +659,107 @@
   </div>
 </div>
 
+<!-- 定期課題 一覧・管理モーダル -->
+<div class="overlay" id="recurringListOverlay" onclick="closeRecurringListOutside(event)">
+  <div class="modal" style="width:540px;">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;">
+      <div class="modal-title" style="margin-bottom:0;">🔁 定期課題の管理</div>
+      <button class="btn" style="font-size:.82rem;padding:7px 14px;" onclick="openRecurringEdit()">＋ 新規追加</button>
+    </div>
+    <div id="recurringListBody" style="display:flex;flex-direction:column;gap:8px;"></div>
+    <div style="margin-top:16px;text-align:right;">
+      <button class="btn btn-cancel" onclick="closeRecurringList()">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<!-- 定期課題 追加/編集モーダル -->
+<div class="overlay" id="recurringEditOverlay" onclick="closeRecurringEditOutside(event)">
+  <div class="modal" style="width:480px;">
+    <div class="modal-title" id="recurringEditTitle">定期課題を追加</div>
+
+    <div class="form-group">
+      <label>科目名 *</label>
+      <input type="text" id="rf-subject" placeholder="例：管理会計論">
+    </div>
+    <div class="form-group">
+      <label>課題タイトル *</label>
+      <input type="text" id="rf-title" placeholder="例：小テスト">
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>毎週 何曜日に発生？ *</label>
+        <select id="rf-day">
+          <option value="0">日曜日</option>
+          <option value="1">月曜日</option>
+          <option value="2">火曜日</option>
+          <option value="3">水曜日</option>
+          <option value="4">木曜日</option>
+          <option value="5">金曜日</option>
+          <option value="6">土曜日</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>発生時刻（任意）</label>
+        <input type="time" id="rf-startTime" value="14:30">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>締切は何日後？ *</label>
+        <select id="rf-offsetDays">
+          <option value="0">同じ日</option>
+          <option value="1" selected>翌日</option>
+          <option value="2">2日後</option>
+          <option value="3">3日後</option>
+          <option value="4">4日後</option>
+          <option value="5">5日後</option>
+          <option value="6">6日後</option>
+          <option value="7">7日後（次の同曜日）</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>締切時刻 *</label>
+        <input type="time" id="rf-dueTime" value="16:00">
+      </div>
+    </div>
+
+    <div class="form-row">
+      <div class="form-group">
+        <label>優先度</label>
+        <select id="rf-priority">
+          <option value="high">🔴 高</option>
+          <option value="mid" selected>🟡 中</option>
+          <option value="low">🟢 低</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>提出方法</label>
+        <select id="rf-submit">
+          <option value="">-</option>
+          <option value="manaba">manaba</option>
+          <option value="moodle">Moodle</option>
+          <option value="paper">紙提出</option>
+          <option value="email">メール</option>
+          <option value="other">その他</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>メモ</label>
+      <textarea id="rf-notes" placeholder="参考資料・注意事項など"></textarea>
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-cancel" onclick="closeRecurringEdit()">キャンセル</button>
+      <button class="btn" onclick="saveRecurring()">保存</button>
+    </div>
+  </div>
+</div>
+
 <!-- 追加/編集モーダル -->
 <div class="overlay" id="overlay" onclick="closeModalOutside(event)">
   <div class="modal">
@@ -713,6 +815,161 @@
 </div>
 
 <script>
+// =========================================================
+// 定期課題システム
+// =========================================================
+const RECURRING_KEY = 'kadai_recurring_v1';
+let recurring = JSON.parse(localStorage.getItem(RECURRING_KEY) || '[]');
+let recurringEditId = null;
+function saveRecurring() {
+  const subj  = document.getElementById('rf-subject').value.trim();
+  const title = document.getElementById('rf-title').value.trim();
+  if (!subj || !title) { alert('科目名と課題タイトルは必須です'); return; }
+  const data = {
+    subject:     subj,
+    title:       title,
+    dayOfWeek:   parseInt(document.getElementById('rf-day').value),
+    startTime:   document.getElementById('rf-startTime').value,
+    offsetDays:  parseInt(document.getElementById('rf-offsetDays').value),
+    dueTime:     document.getElementById('rf-dueTime').value,
+    priority:    document.getElementById('rf-priority').value,
+    submit:      document.getElementById('rf-submit').value,
+    notes:       document.getElementById('rf-notes').value,
+    enabled:     true,
+  };
+  if (recurringEditId) {
+    const idx = recurring.findIndex(r => r.id === recurringEditId);
+    recurring[idx] = { ...recurring[idx], ...data };
+  } else {
+    recurring.push({ id: genId(), ...data });
+  }
+  localStorage.setItem(RECURRING_KEY, JSON.stringify(recurring));
+  generateRecurringTasks();
+  render();
+  closeRecurringEdit();
+  renderRecurringList();
+}
+
+function deleteRecurring(id) {
+  if (!confirm('この定期課題テンプレートを削除しますか？\n（生成済みの課題は残ります）')) return;
+  recurring = recurring.filter(r => r.id !== id);
+  localStorage.setItem(RECURRING_KEY, JSON.stringify(recurring));
+  renderRecurringList();
+}
+
+function toggleRecurringEnabled(id) {
+  const r = recurring.find(x => x.id === id);
+  if (r) r.enabled = !r.enabled;
+  localStorage.setItem(RECURRING_KEY, JSON.stringify(recurring));
+  renderRecurringList();
+}
+
+// 今日から4週間分の課題を自動生成
+function generateRecurringTasks() {
+  const WEEKS_AHEAD = 4;
+  let changed = false;
+  recurring.filter(r => r.enabled).forEach(r => {
+    for (let w = 0; w < WEEKS_AHEAD; w++) {
+      // 発生曜日の日付を計算
+      const base = new Date(); base.setHours(0,0,0,0);
+      const diff = (r.dayOfWeek - base.getDay() + 7) % 7 + w * 7;
+      const occur = new Date(base); occur.setDate(base.getDate() + diff);
+      // 締切日
+      const dueD = new Date(occur); dueD.setDate(occur.getDate() + r.offsetDays);
+      const dueStr = dueD.toISOString().slice(0, 10);
+      // 重複チェック（同じrecurringId + 締切日）
+      const alreadyExists = tasks.some(t => t.recurringId === r.id && t.due === dueStr);
+      if (!alreadyExists) {
+        tasks.push({
+          id:          genId(),
+          recurringId: r.id,
+          subject:     r.subject,
+          title:       r.title,
+          due:         dueStr,
+          time:        r.dueTime,
+          priority:    r.priority,
+          submit:      r.submit,
+          notes:       r.notes,
+          done:        false,
+          createdAt:   new Date().toISOString(),
+        });
+        changed = true;
+      }
+    }
+  });
+  if (changed) save();
+}
+
+const DOW_JP = ['日','月','火','水','木','金','土'];
+function renderRecurringList() {
+  const el = document.getElementById('recurringListBody');
+  if (!recurring.length) {
+    el.innerHTML = '<div style="color:var(--muted);text-align:center;padding:20px;font-size:.88rem;">定期課題がまだありません。＋新規追加から登録してください。</div>';
+    return;
+  }
+  el.innerHTML = recurring.map(r => {
+    const dueLabel = r.offsetDays === 0 ? '同日' : r.offsetDays === 1 ? '翌日' : `${r.offsetDays}日後`;
+    const prioColor = r.priority === 'high' ? 'var(--red)' : r.priority === 'low' ? 'var(--green)' : 'var(--yellow)';
+    return `
+      <div style="background:var(--surface2);border:1.5px solid var(--border);border-radius:12px;padding:12px 14px;display:flex;align-items:center;gap:12px;">
+        <div style="flex:1;min-width:0;">
+          <div style="font-size:.72rem;color:var(--muted);font-weight:600;">${esc(r.subject)}</div>
+          <div style="font-size:.93rem;font-weight:700;color:var(--text);">${esc(r.title)}</div>
+          <div style="font-size:.75rem;color:var(--muted);margin-top:3px;">
+            毎週<b style="color:var(--text);">${DOW_JP[r.dayOfWeek]}曜</b>${r.startTime ? ' ' + r.startTime + '〜' : ''}
+            → 締切 <b style="color:${prioColor};">${dueLabel} ${r.dueTime}</b>
+            ${r.submit ? '　📤' + r.submit : ''}
+          </div>
+        </div>
+        <div style="display:flex;gap:6px;flex-shrink:0;">
+          <button class="icon-btn" onclick="toggleRecurringEnabled('${r.id}')" title="${r.enabled?'無効化':'有効化'}" style="color:${r.enabled?'var(--green)':'var(--muted)'};">
+            ${r.enabled ? '✓ON' : 'OFF'}
+          </button>
+          <button class="icon-btn" onclick="openRecurringEdit('${r.id}')">編集</button>
+          <button class="icon-btn" onclick="deleteRecurring('${r.id}')" style="color:var(--red);">削除</button>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function openRecurringList() {
+  renderRecurringList();
+  document.getElementById('recurringListOverlay').classList.add('show');
+}
+function closeRecurringList() { document.getElementById('recurringListOverlay').classList.remove('show'); }
+function closeRecurringListOutside(e) { if (e.target === document.getElementById('recurringListOverlay')) closeRecurringList(); }
+
+function openRecurringEdit(id = null) {
+  recurringEditId = id;
+  document.getElementById('recurringEditTitle').textContent = id ? '定期課題を編集' : '定期課題を追加';
+  if (id) {
+    const r = recurring.find(x => x.id === id);
+    document.getElementById('rf-subject').value   = r.subject || '';
+    document.getElementById('rf-title').value     = r.title || '';
+    document.getElementById('rf-day').value       = r.dayOfWeek;
+    document.getElementById('rf-startTime').value = r.startTime || '';
+    document.getElementById('rf-offsetDays').value = r.offsetDays;
+    document.getElementById('rf-dueTime').value   = r.dueTime || '23:59';
+    document.getElementById('rf-priority').value  = r.priority || 'mid';
+    document.getElementById('rf-submit').value    = r.submit || '';
+    document.getElementById('rf-notes').value     = r.notes || '';
+  } else {
+    document.getElementById('rf-subject').value = '';
+    document.getElementById('rf-title').value = '';
+    document.getElementById('rf-day').value = '2';
+    document.getElementById('rf-startTime').value = '14:30';
+    document.getElementById('rf-offsetDays').value = '1';
+    document.getElementById('rf-dueTime').value = '16:00';
+    document.getElementById('rf-priority').value = 'mid';
+    document.getElementById('rf-submit').value = '';
+    document.getElementById('rf-notes').value = '';
+  }
+  document.getElementById('recurringEditOverlay').classList.add('show');
+  setTimeout(() => document.getElementById('rf-subject').focus(), 100);
+}
+function closeRecurringEdit() { document.getElementById('recurringEditOverlay').classList.remove('show'); recurringEditId = null; }
+function closeRecurringEditOutside(e) { if (e.target === document.getElementById('recurringEditOverlay')) closeRecurringEdit(); }
+
 // =========================================================
 // やる気ゲームシステム
 // =========================================================
@@ -1270,6 +1527,7 @@ function render() {
 updateHeaderDate();
 checkNotifBanner();
 renderQuote();
+generateRecurringTasks();
 render();
 setInterval(() => { updateHeaderDate(); render(); scheduleNotifs(); }, 60000);
 
