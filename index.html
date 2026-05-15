@@ -158,36 +158,74 @@
   /* 課題リスト */
   .task-list { display: flex; flex-direction: column; gap: 8px; }
   .task-item {
-    background: var(--surface2);
+    background: #fff;
     border: 1.5px solid var(--border);
-    border-radius: 12px;
-    padding: 13px 16px;
+    border-radius: 14px;
+    padding: 14px 16px 12px;
     display: flex;
     align-items: center;
-    gap: 14px;
+    gap: 12px;
     cursor: pointer;
     transition: border-color .15s, box-shadow .15s, transform .1s;
   }
-  .task-item:hover { border-color: var(--accent); box-shadow: 0 2px 8px rgba(79,70,229,.1); transform: translateX(2px); }
-  .task-item.done { opacity: .55; }
+  .task-item:hover { border-color: var(--accent); box-shadow: 0 2px 10px rgba(79,70,229,.1); transform: translateX(2px); }
+  .task-item.done { opacity: .5; background: var(--surface2); }
   .task-item.done .task-title { text-decoration: line-through; color: var(--muted); }
+
+  /* 今日締切の強調 */
+  .task-item.today-urgent {
+    background: #fff8f0;
+    border: 2px solid #fb923c;
+    animation: pulse-border 1.8s ease-in-out infinite;
+  }
+  @keyframes pulse-border {
+    0%, 100% { box-shadow: 0 0 0 0 rgba(251,146,60,.4); }
+    50%       { box-shadow: 0 0 0 6px rgba(251,146,60,.0); }
+  }
+  .task-item.today-urgent:hover { border-color: #ea580c; }
+
   .urgency-bar {
-    width: 4px;
-    height: 38px;
+    width: 5px;
+    min-height: 44px;
     border-radius: 4px;
     flex-shrink: 0;
+    align-self: stretch;
   }
   .urgent  { background: var(--red); }
   .soon    { background: var(--yellow); }
   .normal  { background: #86efac; }
   .done-dot{ background: #d4d0cc; }
+
   .task-info { flex: 1; min-width: 0; }
-  .task-subject { font-size: 0.72rem; color: var(--muted); margin-bottom: 1px; font-weight: 600; letter-spacing: .3px; }
-  .task-title { font-size: 0.93rem; font-weight: 600; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-  .task-meta { display: flex; gap: 8px; margin-top: 4px; align-items: center; flex-wrap: wrap; }
+
+  /* 授業名チップ（目立つ主役） */
+  .task-subject-chip {
+    display: inline-block;
+    font-size: 0.82rem;
+    font-weight: 800;
+    border-radius: 6px;
+    padding: 2px 10px;
+    margin-bottom: 5px;
+    letter-spacing: .3px;
+  }
+  .task-title { font-size: 0.88rem; font-weight: 500; color: #44403c; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .task-meta { display: flex; gap: 8px; margin-top: 5px; align-items: center; flex-wrap: wrap; }
   .task-due { font-size: 0.74rem; color: var(--muted); }
   .task-due.overdue { color: var(--red); font-weight: 700; }
-  .task-due.today   { color: var(--yellow); font-weight: 700; }
+  .task-due.today   { color: #ea580c; font-weight: 800; }
+
+  /* 今日締切バッジ */
+  .today-badge {
+    background: #ea580c;
+    color: #fff;
+    font-size: 0.7rem;
+    font-weight: 800;
+    border-radius: 5px;
+    padding: 2px 8px;
+    letter-spacing: .3px;
+    animation: blink 1.2s step-start infinite;
+  }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.5} }
   .task-actions { display: flex; gap: 6px; }
   .icon-btn {
     background: #fff;
@@ -1270,20 +1308,24 @@ function renderList() {
   el.innerHTML = list.map(task => {
     const urg = urgency(task);
     const dotClass = task.done ? 'done-dot' : urg === 'overdue' ? 'urgent' : urg === 'today' || urg === 'soon' ? 'soon' : 'normal';
-    const dueClass = urg === 'overdue' ? 'overdue' : urg === 'today' ? 'today' : '';
-    const prioClass = task.priority === 'high' ? 'p-high' : task.priority === 'low' ? 'p-low' : 'p-mid';
-    const prioLabel = task.priority === 'high' ? '高' : task.priority === 'low' ? '低' : '中';
-    const submitBadge = task.submit ? `<span style="font-size:.68rem;color:var(--muted);">${task.submit}</span>` : '';
-    const templateBtn = task.templateUrl ? `<a href="${task.templateUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:.72rem;color:var(--accent);font-weight:700;text-decoration:none;background:#eef2ff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;" title="テンプレートを開く">📂 テンプレート</a>` : '';
+    const isToday = urg === 'today';
+    const dueClass = urg === 'overdue' ? 'overdue' : isToday ? 'today' : '';
+    const submitBadge = task.submit ? `<span style="font-size:.7rem;color:var(--muted);background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:1px 6px;">${esc(task.submit)}</span>` : '';
+    const templateBtn = task.templateUrl ? `<a href="${task.templateUrl}" target="_blank" rel="noopener" onclick="event.stopPropagation()" style="font-size:.72rem;color:var(--accent);font-weight:700;text-decoration:none;background:#eef2ff;border:1px solid #c7d2fe;border-radius:5px;padding:2px 8px;">📂 テンプレート</a>` : '';
+    const todayBadge = isToday && !task.done ? `<span class="today-badge">🚨 今日締切！</span>` : '';
+    const chipColor = subjectColor(task.subject);
+    const chipStyle = task.done
+      ? 'background:#e7e5e4;color:#a8a29e;'
+      : `background:${chipColor.bg};color:${chipColor.fg};`;
     return `
-      <div class="task-item ${task.done?'done':''}" onclick="editTask('${task.id}')">
-        <div class="urgency-dot ${dotClass}"></div>
+      <div class="task-item ${task.done?'done':''} ${isToday&&!task.done?'today-urgent':''}" onclick="editTask('${task.id}')">
+        <div class="urgency-bar ${task.done?'done-dot':urg==='overdue'?'urgent':urg==='today'||urg==='soon'?'soon':'normal'}"></div>
         <div class="task-info">
-          <div class="task-subject">${esc(task.subject)}</div>
+          <div><span class="task-subject-chip" style="${chipStyle}">${esc(task.subject)}</span></div>
           <div class="task-title">${esc(task.title)}</div>
           <div class="task-meta">
             <span class="task-due ${dueClass}">📅 ${formatDue(task)}</span>
-            <span class="priority-chip ${prioClass}">優先度 ${prioLabel}</span>
+            ${todayBadge}
             ${submitBadge}
             ${templateBtn}
           </div>
@@ -1298,6 +1340,25 @@ function renderList() {
 }
 
 function esc(s) { return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+
+const SUBJECT_PALETTES = [
+  { bg:'#dbeafe', fg:'#1d4ed8' }, // 青
+  { bg:'#dcfce7', fg:'#15803d' }, // 緑
+  { bg:'#fce7f3', fg:'#be185d' }, // ピンク
+  { bg:'#fef3c7', fg:'#b45309' }, // 黄
+  { bg:'#ede9fe', fg:'#6d28d9' }, // 紫
+  { bg:'#ffedd5', fg:'#c2410c' }, // オレンジ
+  { bg:'#cffafe', fg:'#0e7490' }, // シアン
+  { bg:'#fae8ff', fg:'#a21caf' }, // マゼンタ
+];
+const _subjectColorCache = {};
+function subjectColor(name) {
+  if (!_subjectColorCache[name]) {
+    const used = Object.keys(_subjectColorCache).length;
+    _subjectColorCache[name] = SUBJECT_PALETTES[used % SUBJECT_PALETTES.length];
+  }
+  return _subjectColorCache[name];
+}
 
 // =========================================================
 // 週間カレンダー
